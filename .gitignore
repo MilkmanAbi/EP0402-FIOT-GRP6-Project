@@ -1,0 +1,21 @@
+# Credentials — NEVER commit. This repo is public.
+firmware/ParcelGuardian/Secrets.h
+
+# Arduino build output
+build/
+*.hex
+*.elf
+*.bin
+*.eep
+*.lst
+*.map
+
+# arduino-cli / IDE scratch
+.theia/
+.vscode/
+*.tmp
+
+# OS noise
+Thumbs.db
+desktop.ini
+.DS_Store
