@@ -17,7 +17,7 @@ This guide does not assume its hotspot uses `192.168.43.1`.
    guarantee of reachability. A connected laptop's default gateway is usually
    the hotspot address (`ipconfig` on Windows).
 5. Save the app settings, then copy its firmware configuration. Put those values
-   in `firmware/ParcelGuardian/Secrets.h`, with the actual hotspot SSID/password.
+   in `arduino/ParcelGuardian/Secrets.h`, with the actual hotspot SSID/password.
    This file is gitignored. Leave `UPLINK_PHONE=1` in Config.h.
 6. Compile and upload the Uno. First verify `AT` using EspAtTest and the separate
    GPS, ADXL and SD bench tools. Select the actual Uno USB port when uploading.

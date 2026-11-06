@@ -1,5 +1,5 @@
 # Credentials — NEVER commit. This repo is public.
-firmware/ParcelGuardian/Secrets.h
+arduino/ParcelGuardian/Secrets.h
 
 # Arduino build output
 build/

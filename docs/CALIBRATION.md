@@ -6,7 +6,7 @@ The firmware ships with `IMPACT_ROUGH_G = 0.40` and `IMPACT_SEVERE_G = 1.20` in 
 
 ## Method
 
-1. Upload `firmware/tools/AdxlDropTest`. Serial Monitor at 9600.
+1. Upload `arduino/tools/AdxlDropTest`. Serial Monitor at 9600.
 2. Let it calibrate — hold the board perfectly still for two seconds.
 3. **Put the board inside the parcel you will actually demo with.** Padding, box stiffness and where the unit sits all change the numbers. Calibrating a bare PCB and then demoing it inside a padded box will give you thresholds that never fire.
 4. For each test below, do **five** repetitions and take the **median** — single drops scatter badly.

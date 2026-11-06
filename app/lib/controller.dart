@@ -227,7 +227,7 @@ class ControlCentre extends ChangeNotifier {
 
   String firmwareConfig(String host) =>
       '''
-// Copy into firmware/ParcelGuardian/Secrets.h (gitignored).
+// Copy into arduino/ParcelGuardian/Secrets.h (gitignored).
 // Set WIFI_SSID and WIFI_PASSWORD to your 2.4 GHz WPA2 phone hotspot.
 #define WIFI_SSID "YOUR_HOTSPOT_NAME"
 #define WIFI_PASSWORD "YOUR_HOTSPOT_PASSWORD"

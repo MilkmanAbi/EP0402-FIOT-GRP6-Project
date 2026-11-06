@@ -5,7 +5,7 @@
  * NOT a standalone ESP8266 Arduino sketch. Modules often ship at 115200;
  * SoftwareSerial is not reliable that fast on an Uno, so reconfigure the
  * module with AT+UART_DEF=9600,8,1,0,0 before using this firmware. See
- * firmware/tools/EspAtTest for a passthrough that lets you do exactly that.
+ * arduino/tools/EspAtTest for a passthrough that lets you do exactly that.
  *
  * THE UPLINK IS BEST-EFFORT BY DESIGN. Every call here can fail and the
  * system carries on: the microSD card is the system of record, the cloud

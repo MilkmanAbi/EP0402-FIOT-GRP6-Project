@@ -4,10 +4,10 @@
 #include "Arduino.h"
 uint32_t fakeClock=100;
 void pgServiceUplink(){fakeClock++;}
-#include "../../firmware/ParcelGuardian/Persist.cpp"
-#include "../../firmware/ParcelGuardian/GpsModule.cpp"
-#include "../../firmware/ParcelGuardian/Fmt.cpp"
-#include "../../firmware/ParcelGuardian/EspClient.cpp"
+#include "../../arduino/ParcelGuardian/Persist.cpp"
+#include "../../arduino/ParcelGuardian/GpsModule.cpp"
+#include "../../arduino/ParcelGuardian/Fmt.cpp"
+#include "../../arduino/ParcelGuardian/EspClient.cpp"
 
 static std::string nmea(std::string s){
   unsigned char sum=0;for(char c:s)sum^=c;

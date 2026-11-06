@@ -1,3 +1,10 @@
+# Original design (archived)
+
+This is the original repository README, preserved as design history. Its
+`firmware/` paths describe the old layout; current Arduino source is under
+`arduino/`. Follow the [current README](../README.md) for downloads, setup and
+the phone-server architecture.
+
 # ParcelGuardian — EP0402 FIOT Group 6
 
 Firmware for a **wireless mishandling-prevention and loss-detection tracker** that rides inside a parcel.

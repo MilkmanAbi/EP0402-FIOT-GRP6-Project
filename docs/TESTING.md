@@ -33,7 +33,7 @@ zero warnings: 31,604 bytes flash and 1,274 bytes global RAM.
 | GpsRawTest | 3,992 | 315 | Compiled |
 | SdCardTest | 12,360 | 839 | Compiled |
 
-Native harness `tests/firmware/run.cmd` compiled and ran the actual Persist.cpp,
+Native harness `tests/arduino/run.cmd` compiled and ran the actual Persist.cpp,
 GpsModule.cpp, Fmt.cpp and EspClient.cpp using mocked hardware and AVR struct
 packing. Passed:
 
@@ -81,6 +81,14 @@ fixture. The app then still showed LOST based on the unchanged original receipt,
 confirming that SD import does not fabricate new device contact.
 Receiver CSV export opened Android's share sheet with `parcel-1001.csv`.
 No share destination was selected and no records were sent to another service.
+
+## Physical phone app check
+
+The app was installed and opened on a CMF Phone 2 Pro running the reported
+Nothing OS 4.3. The five screenshots in `docs/images/` show Overview, Map,
+Evidence, Insights and Settings on that handset before tracker data arrived.
+This confirms app launch and the visible screens; it does not establish a
+successful physical ESP-to-phone upload or calibrated sensor behaviour.
 
 ## Physical acceptance tests still required
 
