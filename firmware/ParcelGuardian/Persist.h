@@ -20,6 +20,7 @@ struct PersistData {
   uint16_t bootCount;
   uint32_t eventCount;   /* cumulative mishandling events          */
   uint16_t shipmentId;
+  uint16_t generation;  /* alternating EEPROM journal sequence */
   uint16_t checksum;
 };
 

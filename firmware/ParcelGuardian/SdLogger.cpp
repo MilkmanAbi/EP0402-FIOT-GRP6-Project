@@ -59,8 +59,11 @@ bool sdLogBoot(uint16_t bootCount, uint16_t shipmentId) {
   f.print(F(" shipment "));
   f.print(shipmentId);
   f.print(F(" firmware ParcelGuardian\n"));
+  f.flush();
+  bool ok = !f.getWriteError();
   f.close();
-  return true;
+  if (!ok) errors_++;
+  return ok;
 }
 
 bool sdLogRow(const char *utc, const char *state, const char *event,
@@ -100,9 +103,11 @@ bool sdLogRow(const char *utc, const char *state, const char *event,
   f.print(uploaded ? 1 : 0);
   f.write('\n');
 
+  f.flush();
+  bool ok = !f.getWriteError();
   f.close();
-  rows_++;
-  return true;
+  if (ok) rows_++; else errors_++;
+  return ok;
 }
 
 bool sdDump(Stream &out) {
@@ -117,7 +122,7 @@ bool sdDump(Stream &out) {
   while (f.available()) {
     char c = (char)f.read();
     out.write(c);
-    if (c == '\n') PG_KICK();
+    PG_KICK();
   }
   f.close();
   return true;
@@ -125,7 +130,7 @@ bool sdDump(Stream &out) {
 
 bool sdWipe() {
   if (!ready_) return false;
-  if (SD.exists(LOG_FILENAME)) SD.remove(LOG_FILENAME);
+  if (SD.exists(LOG_FILENAME) && !SD.remove(LOG_FILENAME)) { errors_++; return false; }
   rows_ = 0;
   errors_ = 0;
   return sdBegin();   /* recreate with a fresh header */

@@ -16,8 +16,8 @@
  * drop that lands on the "wrong" face. The vector magnitude does not care
  * which way up the box is.
  *
- * What this does NOT claim: this is validated IMPACT detection, not fall
- * detection. We never report free-fall, tilt or orientation.
+ * Thresholds are unvalidated defaults until measured with the actual
+ * parcel. This is impact thresholding, not validated fall/damage detection.
  */
 #ifndef PG_IMPACT_DETECTOR_H
 #define PG_IMPACT_DETECTOR_H

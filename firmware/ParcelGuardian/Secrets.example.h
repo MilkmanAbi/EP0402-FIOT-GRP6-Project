@@ -27,4 +27,11 @@
 /* Identifies this tracker in the log and on the channel. Any 1..65535. */
 #define SHIPMENT_ID 1001
 
+/* In the app: Settings > Receiver lists the phone's actual IPv4 address.
+ * Android hotspot addresses vary by manufacturer. Do not assume this
+ * example is correct for your phone. Use a 16..32 character URL-safe key. */
+#define PHONE_SERVER_HOST "192.168.43.1"
+#define PHONE_API_KEY "CHANGE_ME_16_CHARS"
+
+
 #endif /* PG_SECRETS_H */

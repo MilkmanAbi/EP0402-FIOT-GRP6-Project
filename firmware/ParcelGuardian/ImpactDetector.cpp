@@ -26,12 +26,11 @@ bool ImpactDetector::calibrate(uint16_t samples) {
 
   /* Demand most of the samples — a handful of I2C reads succeeding is not
    * a baseline worth trusting. */
-  if (good < (samples / 2)) return false;
+  if (good == 0 || good < (samples + 1U) / 2U) return false;
 
   baseline_   = sum / good;
   calibrated_ = true;
   lastDelta_  = 0.0f;
-  peakDelta_  = 0.0f;
   return true;
 }
 

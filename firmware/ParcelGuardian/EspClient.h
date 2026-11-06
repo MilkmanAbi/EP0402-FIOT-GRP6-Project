@@ -1,5 +1,5 @@
 /*
- * EspClient.h — ESP-01 AT-command driver and ThingSpeak uplink.
+ * EspClient.h — ESP-01 AT-command driver and phone/ThingSpeak uplink.
  *
  * Assumes the ESP-01 is running ESP-AT / AT-command firmware at 9600 baud,
  * NOT a standalone ESP8266 Arduino sketch. Modules often ship at 115200;
@@ -12,8 +12,8 @@
  * is a cache of whatever got through. Nothing in this file is allowed to
  * block the main loop for longer than its stated timeout.
  *
- * SECURITY: plain HTTP on port 80. The write key and the coordinates are
- * sent in clear text. Demo data only — see docs/SECURITY.md.
+ * SECURITY: local HTTP on port 8080 by default; legacy ThingSpeak uses 80.
+ * The pairing/write key and coordinates are cleartext. See docs/SECURITY.md.
  */
 #ifndef PG_ESP_CLIENT_H
 #define PG_ESP_CLIENT_H
@@ -38,7 +38,7 @@ EspState espState();
  * afterwards or the GPS stays deaf. espUpload() does this for you. */
 void espListen();
 
-/* POST one record to ThingSpeak. Returns true only when the server
+/* GET one record to the configured receiver. Returns true only when the server
  * accepted the write (entry id != 0), not merely when the ESP said SEND OK —
  * those are very different things and conflating them is the classic
  * "why is my channel empty" bug.

@@ -11,6 +11,9 @@
 #define PG_CONFIG_H
 
 #include <Arduino.h>
+#ifndef UPLINK_PHONE
+#define UPLINK_PHONE 1
+#endif
 
 /* ------------------------------------------------------------------ *
  *  PIN MAP — taken from the supplied shield documentation.
@@ -28,7 +31,7 @@
 #define PIN_GPS_RX       4   /* Uno receives  <- NEO-6M TX      */
 #define PIN_ESP_TX       3   /* Uno transmits -> ESP-01 RX      */
 #define PIN_ESP_RX       2   /* Uno receives  <- ESP-01 TX      */
-/* ADXL345 sits on A4 (SDA) / A5 (SCL) and is reached through Wire. */
+/* ADXL345 sits on A4 (SDA) / A5 (SCL) and is reached through the bounded TWI driver. */
 
 /* SoftwareSerial is constructed as (rxPin, txPin) from the UNO's point of
  * view, so the ports are gps(4,5) and esp(2,3). Getting this backwards is
@@ -94,7 +97,11 @@
  *  the whole lifecycle inside a minute).
  * ------------------------------------------------------------------ */
 #define DEMO_HEARTBEAT_MS    5000UL
+#if UPLINK_PHONE
 #define DEMO_UPLOAD_MS      10000UL
+#else
+#define DEMO_UPLOAD_MS      20000UL
+#endif
 #define DEMO_PREP_TIMEOUT_MS 8000UL
 
 /* ------------------------------------------------------------------ *
@@ -109,6 +116,10 @@
  * ------------------------------------------------------------------ */
 #define THINGSPEAK_HOST  "api.thingspeak.com"
 #define THINGSPEAK_PORT  80
+
+/* Default: the Android phone is both hotspot and HTTP receiver.
+ * Set UPLINK_PHONE=0 for the legacy direct ThingSpeak build. */
+#define PHONE_SERVER_PORT 8080
 #define ESP_CMD_TIMEOUT    4000UL
 #define ESP_JOIN_TIMEOUT  15000UL
 #define ESP_TCP_TIMEOUT    8000UL

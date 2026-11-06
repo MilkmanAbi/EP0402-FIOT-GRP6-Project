@@ -7,9 +7,9 @@
  * fail to observe the exact window it exists to observe.
  *
  * Every row is opened, written and closed immediately. That costs a few
- * milliseconds per row but means a power cut loses at most the row in
- * flight, which matters because power cuts and dropped parcels tend to
- * happen at the same moment.
+ * milliseconds per row and limits buffered data. It does not guarantee
+ * that only one row is lost: sudden power loss can also corrupt FAT
+ * metadata or the card's internal writes. Test the actual card/power path.
  *
  * Rows are streamed field by field straight into the File object rather
  * than composed in a RAM buffer first — on a 2 KB part a 96-byte line

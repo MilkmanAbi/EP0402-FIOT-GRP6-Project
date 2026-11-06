@@ -150,7 +150,7 @@ void loop() {
     if (c == 'c') calibrate();
   }
 
-  float m;
+  float m = baseline;
   if (readMag(m)) {
     float d = fabs(m - baseline);
     if (d > peak) {

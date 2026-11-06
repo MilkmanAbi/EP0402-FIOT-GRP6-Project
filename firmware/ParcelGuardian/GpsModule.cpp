@@ -1,5 +1,6 @@
 #include "GpsModule.h"
 #include <SoftwareSerial.h>
+#if ENABLE_GPS
 
 /* SoftwareSerial takes (rxPin, txPin) from the Uno's point of view. */
 static SoftwareSerial gpsPort(PIN_GPS_RX, PIN_GPS_TX);
@@ -19,6 +20,7 @@ static uint8_t  sats_ = 0;
 static uint16_t year_ = 0;
 static uint8_t  month_ = 0, day_ = 0, hour_ = 0, minute_ = 0, second_ = 0;
 static bool     haveTime_ = false;
+static uint32_t timeMs_ = 0;
 
 static uint32_t chars_ = 0;
 static uint16_t good_  = 0;
@@ -60,16 +62,20 @@ static uint32_t digits(const char *s, uint8_t n) {
  * minutes glued together, which is why they are never simply atof'd. */
 static bool parseCoord(const char *f, double &out) {
   uint8_t len = fieldLen(f);
-  if (len < 4) return false;
+  if (len < 6 || len > 13) return false;
+  for (uint8_t i=0; i<len; ++i)
+    if ((f[i] < '0' || f[i] > '9') && f[i] != '.') return false;
 
   uint8_t dot = 0;
   while (dot < len && f[dot] != '.') dot++;
-  if (dot < 3 || dot == len) return false;
+  if ((dot != 4 && dot != 5) || dot + 1 >= len) return false;
+  for (uint8_t i=dot+1; i<len; ++i) if (f[i] == '.') return false;
 
   uint8_t degDigits = dot - 2;
   double deg = (double)digits(f, degDigits);
   double min = (double)digits(f + degDigits, 2);
 
+  if (min >= 60) return false;
   double frac = 0.0, scale = 0.1;
   for (uint8_t i = dot + 1; i < len; i++) {
     if (f[i] < '0' || f[i] > '9') break;
@@ -115,7 +121,9 @@ static void applyDate(const char *f) {
   day_   = (uint8_t)digits(f,     2);
   month_ = (uint8_t)digits(f + 2, 2);
   year_  = (uint16_t)(2000 + digits(f + 4, 2));
-  haveTime_ = true;
+  haveTime_ = year_ >= 2020 && month_ >= 1 && month_ <= 12 &&
+              day_ >= 1 && day_ <= 31 && hour_ < 24 && minute_ < 60 && second_ <= 60;
+  timeMs_ = millis();
 }
 
 /* ------------------------------------------------------------------ *
@@ -124,6 +132,7 @@ static void applyDate(const char *f) {
 
 /* $xxGGA,time,lat,NS,lon,EW,quality,sats,hdop,... */
 static void handleGGA() {
+  haveFix_ = false;
   const char *f;
 
   f = field(line_, 1); if (f) applyTime(f);
@@ -134,7 +143,7 @@ static void handleGGA() {
   f = field(line_, 7);
   if (f && fieldLen(f)) sats_ = (uint8_t)digits(f, fieldLen(f) > 2 ? 2 : fieldLen(f));
 
-  if (quality == 0) return;          /* no fix — leave the old one to age out */
+  if (quality == 0) { haveFix_ = false; return; }
 
   double la, lo;
   const char *fLat = field(line_, 2);
@@ -144,6 +153,10 @@ static void handleGGA() {
   if (!fLat || !fNS || !fLon || !fEW) return;
   if (!parseCoord(fLat, la) || !parseCoord(fLon, lo)) return;
 
+  if (fieldLen(fNS)!=1 || (*fNS!='N' && *fNS!='S') ||
+      fieldLen(fEW)!=1 || (*fEW!='E' && *fEW!='W') || la>90 || lo>180) {
+    haveFix_ = false; return;
+  }
   if (*fNS == 'S') la = -la;
   if (*fEW == 'W') lo = -lo;
 
@@ -154,13 +167,14 @@ static void handleGGA() {
 
 /* $xxRMC,time,status,lat,NS,lon,EW,speed,course,date,... */
 static void handleRMC() {
+  haveFix_ = false;
   const char *f;
 
   f = field(line_, 1); if (f) applyTime(f);
   f = field(line_, 9); if (f) applyDate(f);
 
   f = field(line_, 2);
-  if (!f || *f != 'A') return;        /* V = void */
+  if (!f || *f != 'A') { haveFix_ = false; return; } /* V = void */
 
   double la, lo;
   const char *fLat = field(line_, 3);
@@ -170,6 +184,10 @@ static void handleRMC() {
   if (!fLat || !fNS || !fLon || !fEW) return;
   if (!parseCoord(fLat, la) || !parseCoord(fLon, lo)) return;
 
+  if (fieldLen(fNS)!=1 || (*fNS!='N' && *fNS!='S') ||
+      fieldLen(fEW)!=1 || (*fEW!='E' && *fEW!='W') || la>90 || lo>180) {
+    haveFix_ = false; return;
+  }
   if (*fNS == 'S') la = -la;
   if (*fEW == 'W') lo = -lo;
 
@@ -263,7 +281,7 @@ static char *put2(char *d, uint8_t v) {
 bool gpsTimestamp(char *out, uint8_t len) {
   if (len < 20) { if (len) out[0] = '\0'; return false; }
 
-  if (!haveTime_) { strcpy_P(out, PSTR("no-time")); return false; }
+  if (!haveTime_ || (uint32_t)(millis()-timeMs_) >= 10000UL) { strcpy_P(out, PSTR("no-time")); return false; }
 
   char *d = out;
   *d++ = '0' + (year_ / 1000) % 10;
@@ -278,3 +296,20 @@ bool gpsTimestamp(char *out, uint8_t len) {
   *d = '\0';
   return true;
 }
+#else
+void gpsBegin() {}
+void gpsListen() {}
+void gpsService() {}
+bool gpsHasFix(uint32_t) { return false; }
+double gpsLat() { return 0; }
+double gpsLon() { return 0; }
+uint8_t gpsSats() { return 0; }
+uint32_t gpsFixAgeMs() { return 0xFFFFFFFFUL; }
+uint32_t gpsCharsProcessed() { return 0; }
+uint16_t gpsGoodSentences() { return 0; }
+uint16_t gpsChecksumErrors() { return 0; }
+bool gpsTimestamp(char *out, uint8_t len) {
+  if (len) out[0] = '\0';
+  return false;
+}
+#endif

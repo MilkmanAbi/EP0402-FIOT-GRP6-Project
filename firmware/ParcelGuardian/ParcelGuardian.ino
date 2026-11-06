@@ -151,25 +151,29 @@ static void attemptUpload() {
   enterState(ST_SYNC);
 
   bool fix = gpsHasFix();
-  if (!fix && pendingStatus == 0) pendingStatus = 3;
+  const uint8_t status = pendingStatus ? pendingStatus : (fix ? 0 : 3);
+  const uint32_t sentCount = impact.eventCount();
 
   bool ok = espUpload(fix,
                       fix ? gpsLat() : 0.0,
                       fix ? gpsLon() : 0.0,
                       impact.peakDeltaG(),
-                      pendingStatus,
-                      impact.eventCount());
+                      status,
+                      sentCount);
 
-  Serial.print(F("[cloud] upload "));
+  Serial.print(F("[uplink] upload "));
   Serial.println(ok ? F("accepted") : F("FAILED"));
 
+  logRow(4 /* UPLOAD */, ok);
   if (ok) {
-    buzzPlay(BUZZ_UPLOAD);
-    impact.clearPeak();      /* peak is "since the last upload" */
-    pendingStatus = 0;
+    if (!buzzBusy()) buzzPlay(BUZZ_UPLOAD);
+    /* Events detected while the AT transaction ran still need reporting. */
+    if (impact.eventCount() == sentCount) {
+      impact.clearPeak();
+      pendingStatus = 0;
+    }
   }
 
-  logRow(4 /* UPLOAD */, ok);
   enterState(prev == ST_SYNC ? ST_TRANSIT : prev);
 }
 #endif
@@ -189,7 +193,11 @@ static void handleImpact(ImpactLevel lvl) {
   }
 
   alertUntilMs = millis() + 3000UL;
+  ledSet(LED_FAST);
+  /* Preserve the local evidence before EEPROM and any uplink. */
+  logRow(lvl == IMPACT_SEVERE ? 2 : 1, false);
   persistSetEventCount(impact.eventCount());
+  indicatorsUpdate();
 
   Serial.print(F("[IMPACT] "));
   Serial.print(lvl == IMPACT_SEVERE ? F("SEVERE") : F("rough"));
@@ -198,14 +206,20 @@ static void handleImpact(ImpactLevel lvl) {
   Serial.print(F("g  total="));
   Serial.println(impact.eventCount());
 
-  logRow(lvl == IMPACT_SEVERE ? 2 : 1, false);
+}
+
+/* Called from AT waits, never recursively calls the network client.
+ * GPS reception is unavailable while the ESP owns SoftwareSerial. */
+void pgServiceUplink() {
+  indicatorsUpdate();
+  if (accelOk && mode_ != MODE_READOUT) handleImpact(impact.update());
 }
 
 /* ------------------------------------------------------------------ *
  *  LED reflects the single most important thing happening right now
  * ------------------------------------------------------------------ */
 static void updateLed() {
-  if (!accelOk) { ledSet(LED_TRIPLE); return; }                 /* fault */
+  if (!accelOk || !sdOk() || sdWriteErrors()) { ledSet(LED_TRIPLE); return; }                 /* fault */
   if ((int32_t)(millis() - alertUntilMs) < 0) { ledSet(LED_FAST); return; }
   if (gpsHasFix())            { ledSet(LED_SOLID);     return; }
   if (state_ == ST_TRANSIT)   { ledSet(LED_HEARTBEAT); return; }
@@ -217,7 +231,7 @@ static void updateLed() {
  * ------------------------------------------------------------------ */
 #if ENABLE_CONSOLE
 static void printStatus() {
-  Serial.println(F("---- ParcelGuardian ----"));
+  Serial.println(F("--- ParcelGuardian ---"));
   Serial.print(F("state    ")); Serial.println(stateName(state_));
   Serial.print(F("mode     ")); Serial.println(modeName(mode_));
   Serial.print(F("uptime_s ")); Serial.println(millis() / 1000UL);
@@ -277,10 +291,10 @@ static void printStatus() {
 }
 
 static void printHelp() {
-  Serial.println(F("? help | s status | r freeRAM | m dip/mode"));
-  Serial.println(F("c recalibrate (hold still) | b buzzer test | l LED test"));
-  Serial.println(F("u force upload | g GPS stats | a mark ARRIVED"));
-  Serial.println(F("d dump SD log | w wipe SD log | z reset EEPROM counters"));
+  Serial.println(F("? help s status r RAM m mode"));
+  Serial.println(F("c calibrate b buzzer l LED"));
+  Serial.println(F("u upload g GPS a ARRIVED"));
+  Serial.println(F("d dump w wipe z reset"));
 }
 
 static void handleConsole() {
@@ -300,9 +314,9 @@ static void handleConsole() {
       break;
 
     case 'c':
-      Serial.println(F("calibrating, hold still..."));
+      Serial.println(F("Hold still"));
       if (impact.calibrate(CALIBRATION_SAMPLES)) {
-        Serial.print(F("baseline ")); Serial.print(impact.baseline(), 4);
+        Serial.print(F("baseline ")); fmtPrint(Serial, impact.baseline(), 4);
         Serial.println(F(" g"));
         buzzPlay(BUZZ_OK);
       } else {
@@ -317,9 +331,9 @@ static void handleConsole() {
 
 #if ENABLE_ESP
     case 'u':
-      Serial.println(F("forcing upload..."));
+      Serial.println(F("Upload"));
       if (espState() != ESP_JOINED) {
-        Serial.println(F("not joined; trying to join"));
+        Serial.println(F("Joining"));
         espJoin();
       }
       attemptUpload();
@@ -332,8 +346,8 @@ static void handleConsole() {
       Serial.print(F("  good=")); Serial.print(gpsGoodSentences());
       Serial.print(F("  csErr=")); Serial.print(gpsChecksumErrors());
       Serial.print(F("  sats=")); Serial.println(gpsSats());
-      if (gpsCharsProcessed() < 10)      Serial.println(F("no NMEA - check D4/D5 wiring and GPS power"));
-      else if (gpsGoodSentences() == 0)  Serial.println(F("chars but no valid sentences - check baud"));
+      if (gpsCharsProcessed() < 10)      Serial.println(F("No NMEA: D4/D5/power?"));
+      else if (gpsGoodSentences() == 0)  Serial.println(F("Bad NMEA: baud?"));
       break;
 
     case 'a':
@@ -344,7 +358,7 @@ static void handleConsole() {
 
     case 'd':
       Serial.println(F("---- BEGIN LOG ----"));
-      if (!sdDump(Serial)) Serial.println(F("(no card / no log)"));
+      if (!sdDump(Serial)) Serial.println(F("No SD/log"));
       Serial.println(F("---- END LOG ----"));
       break;
 
@@ -355,7 +369,7 @@ static void handleConsole() {
     case 'z':
       persistReset(SHIPMENT_ID);
       impact.setEventCount(0);
-      Serial.println(F("EEPROM counters reset"));
+      Serial.println(F("Counters reset"));
       break;
 
     default: break;   /* ignore CR/LF and stray characters */
@@ -371,8 +385,8 @@ void setup() {
   delay(50);
 
   Serial.println();
-  Serial.println(F("ParcelGuardian - EP0402 wireless tracker"));
-  Serial.print(F("freeRAM at boot: ")); Serial.println(freeRam());
+  Serial.println(F("ParcelGuardian EP0402"));
+  Serial.print(F("RAM ")); Serial.println(freeRam());
 
   modesBegin();
   indicatorsBegin();
@@ -391,7 +405,7 @@ void setup() {
   if (accelOk) {
     Serial.print(F("ADXL345 ok at 0x")); Serial.println(accel.address(), HEX);
   } else {
-    Serial.println(F("ADXL345 NOT FOUND - impact detection disabled"));
+    Serial.println(F("ADXL345 missing"));
     buzzPlay(BUZZ_ERROR);
   }
 
@@ -399,19 +413,19 @@ void setup() {
   impact.setEventCount(persistEventCount());
 
   if (accelOk) {
-    Serial.println(F("calibrating baseline - keep the unit still"));
+    Serial.println(F("Calibrating: hold still"));
     if (impact.calibrate(CALIBRATION_SAMPLES)) {
-      Serial.print(F("baseline ")); Serial.print(impact.baseline(), 4);
+      Serial.print(F("baseline ")); fmtPrint(Serial, impact.baseline(), 4);
       Serial.println(F(" g"));
     } else {
-      Serial.println(F("calibration failed - using 1.000 g default"));
+      Serial.println(F("Calibration failed: default 1g"));
     }
   }
 
   /* ---- GPS ---- */
 #if ENABLE_GPS
   gpsBegin();
-  Serial.println(F("GPS listening on D4/D5 at 9600"));
+  Serial.println(F("GPS D4/D5 9600"));
 #endif
 
   /* ---- SD ---- */
@@ -429,17 +443,17 @@ void setup() {
 #if ENABLE_ESP
   Serial.println(F("ESP-01: probing..."));
   if (espBegin()) {
-    Serial.println(F("ESP-01 responding; joining AP"));
+    Serial.println(F("ESP ready; joining"));
     if (espJoin()) Serial.println(F("WiFi joined"));
-    else           Serial.println(F("join failed - will retry in transit"));
+    else           Serial.println(F("Join failed; retry later"));
   } else {
-    Serial.println(F("ESP-01 no AT response - check baud/power"));
+    Serial.println(F("ESP: check baud/power"));
   }
   gpsListen();
 #endif
 
-  Serial.print(F("freeRAM after init: ")); Serial.println(freeRam());
-  if (freeRam() < 250) Serial.println(F("WARNING: low SRAM headroom"));
+  Serial.print(F("RAM ")); Serial.println(freeRam());
+  if (freeRam() < 250) Serial.println(F("Low RAM"));
 
   if (accelOk) buzzPlay(BUZZ_OK);
 #if ENABLE_CONSOLE
@@ -485,8 +499,8 @@ void loop() {
     if (state_ != ST_READOUT) enterState(ST_READOUT);
     if (!readoutDone) {
       readoutDone = true;
-      Serial.println(F("---- CHAIN OF CUSTODY ----"));
-      if (!sdDump(Serial)) Serial.println(F("(no card / no log)"));
+      Serial.println(F("--- SD RECORD ---"));
+      if (!sdDump(Serial)) Serial.println(F("No SD/log"));
       Serial.println(F("---- END ----"));
       buzzPlay(BUZZ_OK);
     }
@@ -502,7 +516,7 @@ void loop() {
   if (!sawFixOnce && gpsHasFix()) {
     sawFixOnce = true;
     buzzPlay(BUZZ_FIX);
-    Serial.println(F("[gps] first fix acquired"));
+    Serial.println(F("[gps] first fix"));
   }
 
   uint32_t now = millis();

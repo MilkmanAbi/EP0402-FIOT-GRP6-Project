@@ -23,7 +23,9 @@
 static bool twiWait() {
   uint16_t guard = TWI_WAIT_MAX;
   while (!(TWCR & _BV(TWINT))) {
-    if (--guard == 0) return false;
+    if (--guard == 0) {
+      TWCR = 0; TWCR = _BV(TWEN); return false;
+    }
   }
   return true;
 }
@@ -139,7 +141,7 @@ bool Adxl345::begin() {
   else if (probe(0x1D)) addr_ = 0x1D;
   else { addr_ = 0; return false; }
 
-  /* Full resolution at +/-16 g: nothing clips on a hard drop, and the
+  /* Full resolution at +/-16 g: larger shocks can still clip, while the
    * sensitivity stays constant so the g maths needs no range handling. */
   if (!write8(REG_DATA_FORMAT, DATA_FORMAT_FULLRES_16G)) return false;
   if (!write8(REG_BW_RATE,     BW_RATE_100HZ))           return false;

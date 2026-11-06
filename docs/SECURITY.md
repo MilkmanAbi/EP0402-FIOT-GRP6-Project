@@ -1,5 +1,21 @@
 # Security position
 
+## Current phone-server build
+
+The default now sends **local HTTP to the phone on port 8080**, authenticated
+with a per-install pairing key from Android secure storage. This key is exposed
+to anyone able to observe the local traffic; it is not encryption or a digital
+signature. Use a private demonstration hotspot. No real tracking deployment is
+claimed. The optional phone-to-ThingSpeak relay uses validated HTTPS.
+
+The receiver validates shipment ID and telemetry, saves a flushed journal record
+before acknowledging, and does not expose a history HTTP endpoint. Android backup
+is disabled for this app. Export evidence before uninstalling. Signed evidence,
+tamper-proof chain-of-custody and assured SD power-loss durability remain outside
+this build. See PROTOCOL.md and AUDIT.md for precise limits.
+
+The sections below describe the retained legacy `UPLINK_PHONE=0` route.
+
 A short, honest statement of what this build protects and what it does not. Stating this plainly is worth more marks than pretending the problem does not exist.
 
 ## What is wrong with the transport
