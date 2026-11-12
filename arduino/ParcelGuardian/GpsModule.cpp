@@ -109,21 +109,27 @@ static bool checksumOk(const char *s, uint8_t len) {
   return sum == (uint8_t)((hi << 4) | lo);
 }
 
-static void applyTime(const char *f) {
-  if (fieldLen(f) < 6) return;
-  hour_   = (uint8_t)digits(f,     2);
-  minute_ = (uint8_t)digits(f + 2, 2);
-  second_ = (uint8_t)digits(f + 4, 2);
-}
-
-static void applyDate(const char *f) {
-  if (fieldLen(f) < 6) return;
-  day_   = (uint8_t)digits(f,     2);
-  month_ = (uint8_t)digits(f + 2, 2);
-  year_  = (uint16_t)(2000 + digits(f + 4, 2));
-  haveTime_ = year_ >= 2020 && month_ >= 1 && month_ <= 12 &&
-              day_ >= 1 && day_ <= 31 && hour_ < 24 && minute_ < 60 && second_ <= 60;
+// A dated RMC supplies the complete UTC observation. GGA cannot update it.
+static void applyUtc(const char *time, const char *date) {
+  haveTime_ = false;
+  if (!time || !date || fieldLen(time) < 6 || fieldLen(date) != 6) return;
+  for (uint8_t i = 0; i < 6; ++i)
+    if (time[i] < '0' || time[i] > '9' || date[i] < '0' || date[i] > '9') return;
+  const uint8_t timeLen = fieldLen(time);
+  if (timeLen > 6 && (time[6] != '.' || timeLen == 7)) return;
+  for (uint8_t i = 7; i < timeLen; ++i)
+    if (time[i] < '0' || time[i] > '9') return;
+  const uint8_t day = digits(date, 2), month = digits(date + 2, 2);
+  const uint8_t year = digits(date + 4, 2);
+  const uint8_t hour = digits(time, 2), minute = digits(time + 2, 2), second = digits(time + 4, 2);
+  if (year < 20 || month < 1 || month > 12 || day < 1 ||
+      hour > 23 || minute > 59 || second > 60) return;
+  static const uint8_t days[] PROGMEM = {31,28,31,30,31,30,31,31,30,31,30,31};
+  if (day > pgm_read_byte(days + month - 1) + (month == 2 && year % 4 == 0)) return;
+  day_ = day; month_ = month; year_ = 2000 + year;
+  hour_ = hour; minute_ = minute; second_ = second;
   timeMs_ = millis();
+  haveTime_ = true;
 }
 
 /* ------------------------------------------------------------------ *
@@ -135,7 +141,8 @@ static void handleGGA() {
   haveFix_ = false;
   const char *f;
 
-  f = field(line_, 1); if (f) applyTime(f);
+  f = field(line_, 1);
+  if (haveTime_ && hour_ == 23 && f && f[0] == '0' && f[1] == '0') haveTime_ = false;
 
   f = field(line_, 6);
   uint8_t quality = (f && fieldLen(f)) ? (uint8_t)digits(f, 1) : 0;
@@ -170,8 +177,7 @@ static void handleRMC() {
   haveFix_ = false;
   const char *f;
 
-  f = field(line_, 1); if (f) applyTime(f);
-  f = field(line_, 9); if (f) applyDate(f);
+  applyUtc(field(line_, 1), field(line_, 9));
 
   f = field(line_, 2);
   if (!f || *f != 'A') { haveFix_ = false; return; } /* V = void */

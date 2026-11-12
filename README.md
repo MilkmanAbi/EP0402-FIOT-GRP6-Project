@@ -231,9 +231,9 @@ The APK is written to `app/build/app/outputs/flutter-apk/app-release.apk`.
 `tools/build.ps1` runs both sets of builds and app checks. Native Arduino
 regressions run with `tests/arduino/run.cmd` on Windows with MSVC installed.
 
-The default Uno build has measured **31,790 bytes flash / 1,274 bytes global
+The default Uno build has measured **30,434 bytes flash / 1,327 bytes global
 RAM**, with no Arduino compiler warnings. All four bench sketches compile.
-Eleven Flutter tests and the native GPS/EEPROM/ESP regression harness pass.
+Eleven Flutter tests and the native firmware regression harness pass.
 Emulator checks cover live HTTP reception, authentication, duplicate handling,
 maps, SD import and CSV export. The app also launches on the physical CMF phone
 shown above. See [verification details](docs/TESTING.md) for the distinction

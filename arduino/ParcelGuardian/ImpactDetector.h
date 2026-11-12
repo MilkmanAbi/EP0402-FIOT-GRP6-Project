@@ -70,7 +70,8 @@ private:
   uint32_t roughCount_;
   uint32_t severeCount_;
   uint32_t lastSampleMs_;
-  uint32_t debounceUntilMs_;
+  uint32_t lastImpactMs_;
+  bool     debouncing_;
   bool     calibrated_;
   bool     moving_;
 };

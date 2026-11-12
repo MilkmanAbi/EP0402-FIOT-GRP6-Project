@@ -55,7 +55,16 @@ SD stores the full recorded history. The default uplink is the phone's HTTP
 receiver on port 8080; `UPLINK_PHONE=0` retains the legacy ThingSpeak path.
 Default impact tiers are 0.40/1.20 g with a 2-second debounce, pending physical
 calibration. Console `?` lists commands, `d` dumps the SD log, and DIP mode 11
-enters READOUT. DIP polarity needs checking on the actual shield.
+enters READOUT. READOUT skips Wi-Fi activity and pauses tracking. Leave READOUT
+before using commands that change the log or counters. DIP polarity needs checking
+on the actual shield.
+
+PREP uses the same heartbeat and upload intervals as TRANSIT. A missing or
+unmountable SD card is retried every five seconds during tracking. If an SD
+write or sync fails, the fault LED and console status report the failure and
+logging requires a tracker restart. The tracker clears its FAT cache on restart
+before mounting the card again. A GPS UTC timestamp comes from a valid dated
+RMC sentence and expires after ten seconds.
 
 Keep credentials private. The local HTTP link is unencrypted. GPS reception
 pauses during ESP transactions, brief shocks can be missed, and SD writes are

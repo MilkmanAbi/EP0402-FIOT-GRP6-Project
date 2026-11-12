@@ -76,7 +76,8 @@ static uint32_t  lastEspRetry   = 0;
 static uint32_t  alertUntilMs   = 0;
 static RunMode   mode_          = MODE_NORMAL;
 static bool      accelOk        = false;
-static bool      sdReady        = false;
+static uint32_t  lastSdRetry    = 0;
+static bool      bootedInReadout = false;
 static bool      readoutDone    = false;
 static bool      sawFixOnce     = false;
 static uint8_t   pendingStatus  = 0;   /* 0 ok, 1 rough, 2 severe, 3 no fix */
@@ -219,7 +220,7 @@ void pgServiceUplink() {
  *  LED reflects the single most important thing happening right now
  * ------------------------------------------------------------------ */
 static void updateLed() {
-  if (!accelOk || !sdOk() || sdWriteErrors()) { ledSet(LED_TRIPLE); return; }                 /* fault */
+  if (!accelOk || (ENABLE_SD && !sdOk())) { ledSet(LED_TRIPLE); return; }                 /* fault */
   if ((int32_t)(millis() - alertUntilMs) < 0) { ledSet(LED_FAST); return; }
   if (gpsHasFix())            { ledSet(LED_SOLID);     return; }
   if (state_ == ST_TRANSIT)   { ledSet(LED_HEARTBEAT); return; }
@@ -268,9 +269,8 @@ static void printStatus() {
   }
 
   Serial.print(F("sd       "));
-  if (sdReady) {
-    Serial.print(F("ok  rows=")); Serial.print(sdRowsWritten());
-    Serial.print(F("  errors=")); Serial.println(sdWriteErrors());
+  if (sdOk()) {
+    Serial.print(F("ok  rows=")); Serial.println(sdRowsWritten());
   } else {
     Serial.println(F("not present"));
   }
@@ -300,6 +300,11 @@ static void printHelp() {
 static void handleConsole() {
   if (!Serial.available()) return;
   char c = (char)Serial.read();
+
+  if (mode_ == MODE_READOUT && (c == 'u' || c == 'a' || c == 'c' || c == 'w' || c == 'z')) {
+    Serial.println(F("Leave READOUT first"));
+    return;
+  }
 
   switch (c) {
     case '?': printHelp(); break;
@@ -430,10 +435,11 @@ void setup() {
 
   /* ---- SD ---- */
 #if ENABLE_SD
-  sdReady = sdBegin();
+  bootedInReadout = mode_ == MODE_READOUT;
+  const bool sdReady = sdBegin(bootedInReadout);
   Serial.print(F("microSD: "));
-  Serial.println(sdReady ? F("ready") : F("NOT present (continuing)"));
-  if (sdReady) sdLogBoot(persistBootCount(), persistShipmentId());
+  Serial.println(sdReady ? F("ready") : F("unavailable (continuing)"));
+  if (sdReady && mode_ != MODE_READOUT) sdLogBoot(persistBootCount(), persistShipmentId());
 #endif
 
   /* ---- WiFi ---- *
@@ -441,13 +447,15 @@ void setup() {
    * access point while it is still on the packing bench. It can take
    * fifteen seconds, which is why the watchdog is armed afterwards. */
 #if ENABLE_ESP
-  Serial.println(F("ESP-01: probing..."));
-  if (espBegin()) {
-    Serial.println(F("ESP ready; joining"));
-    if (espJoin()) Serial.println(F("WiFi joined"));
-    else           Serial.println(F("Join failed; retry later"));
-  } else {
-    Serial.println(F("ESP: check baud/power"));
+  if (mode_ != MODE_READOUT) {
+    Serial.println(F("ESP-01: probing..."));
+    if (espBegin()) {
+      Serial.println(F("ESP ready; joining"));
+      if (espJoin()) Serial.println(F("WiFi joined"));
+      else           Serial.println(F("Join failed; retry later"));
+    } else {
+      Serial.println(F("ESP: check baud/power"));
+    }
   }
   gpsListen();
 #endif
@@ -460,7 +468,7 @@ void setup() {
   printHelp();
 #endif
 
-  logRow(3 /* BOOT */, false);
+  if (mode_ != MODE_READOUT) logRow(3 /* BOOT */, false);
   lastHeartbeat = lastUpload = millis();
   enterState(ST_PREP);
 
@@ -478,13 +486,6 @@ void loop() {
   PG_KICK();
 
   indicatorsUpdate();
-#if ENABLE_GPS
-  gpsService();
-#endif
-#if ENABLE_CONSOLE
-  handleConsole();
-#endif
-
   /* ---- DIP switches are live; react to a change mid-run ---- */
   RunMode m = modeRead();
   if (m != mode_) {
@@ -493,6 +494,10 @@ void loop() {
     readoutDone = false;
     Serial.print(F("[mode] ")); Serial.println(modeName(mode_));
   }
+
+#if ENABLE_CONSOLE
+  handleConsole();
+#endif
 
   /* ---- READOUT: the handover mode. Stop tracking, print the log. ---- */
   if (mode_ == MODE_READOUT) {
@@ -507,7 +512,22 @@ void loop() {
     ledSet(LED_SLOW);
     return;              /* no tracking while being read out */
   }
-  if (state_ == ST_READOUT) enterState(ST_TRANSIT);
+  if (state_ == ST_READOUT) {
+    enterState(ST_TRANSIT);
+    if (bootedInReadout) {
+      bootedInReadout = false;
+      if (sdBegin()) sdLogBoot(persistBootCount(), persistShipmentId());
+    }
+  }
+#if ENABLE_GPS
+  gpsService();
+#endif
+#if ENABLE_SD
+  if (!sdOk() && (uint32_t)(millis() - lastSdRetry) >= 5000UL) {
+    lastSdRetry = millis();
+    if (sdBegin()) sdLogBoot(persistBootCount(), persistShipmentId());
+  }
+#endif
 
   /* ---- impact detection runs in every active state ---- */
   if (accelOk) handleImpact(impact.update());
@@ -530,8 +550,8 @@ void loop() {
       if (impact.moving() || (uint32_t)(now - stateEnteredMs) > prepTimeout()) {
         enterState(ST_TRANSIT);
       }
-      break;
-
+      // PREP uses the same check-in and heartbeat cadence as TRANSIT.
+      // Fall through.
     case ST_TRANSIT:
       if ((uint32_t)(now - lastHeartbeat) >= heartbeatPeriod()) {
         lastHeartbeat = now;

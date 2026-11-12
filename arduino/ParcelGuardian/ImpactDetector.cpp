@@ -5,7 +5,7 @@
 ImpactDetector::ImpactDetector()
   : accel_(NULL), baseline_(1.0f), lastDelta_(0.0f), peakDelta_(0.0f),
     eventCount_(0), roughCount_(0), severeCount_(0),
-    lastSampleMs_(0), debounceUntilMs_(0),
+    lastSampleMs_(0), lastImpactMs_(0), debouncing_(false),
     calibrated_(false), moving_(false) {}
 
 void ImpactDetector::begin(Adxl345 *accel) {
@@ -51,7 +51,8 @@ ImpactLevel ImpactDetector::update() {
   moving_ = (delta >= MOTION_G);
 
   /* Still settling from the previous hit — measure, but do not re-fire. */
-  if ((int32_t)(now - debounceUntilMs_) < 0) return IMPACT_NONE;
+  if (debouncing_ && (uint32_t)(now - lastImpactMs_) < IMPACT_DEBOUNCE_MS) return IMPACT_NONE;
+  debouncing_ = false;
 
   ImpactLevel level = IMPACT_NONE;
   if      (delta >= IMPACT_SEVERE_G) level = IMPACT_SEVERE;
@@ -60,7 +61,8 @@ ImpactLevel ImpactDetector::update() {
   if (level != IMPACT_NONE) {
     eventCount_++;
     if (level == IMPACT_SEVERE) severeCount_++; else roughCount_++;
-    debounceUntilMs_ = now + IMPACT_DEBOUNCE_MS;
+    lastImpactMs_ = now;
+    debouncing_ = true;
   }
   return level;
 }

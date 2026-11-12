@@ -17,13 +17,12 @@ calibration or proof that a particular shield/handset combination works.
 
 ## Firmware
 
-Default phone-server build: **31,790 / 32,256 bytes flash (98%)**,
-**1,274 / 2,048 bytes globals**, leaving 774 bytes for stack/locals. Zero
-Arduino compiler warnings. Only 466 bytes of flash remain: longer network
-credentials/configuration strings or additional features can exceed the limit.
-Recompile the real Secrets.h rather than assuming the example's size carries over.
+The 12 November 2026 phone-server build uses **30,434 / 32,256 bytes flash**
+and **1,327 / 2,048 bytes globals**, leaving 721 bytes for stack and locals.
+Arduino CLI reported zero compiler warnings with the example pairing settings.
+Recompile with your own `Secrets.h` to check its size.
 
-Retained legacy direct-ThingSpeak build (`UPLINK_PHONE=0`) also compiled with
+On 6 November, the legacy direct-ThingSpeak build (`UPLINK_PHONE=0`) also compiled with
 zero warnings: 31,604 bytes flash and 1,274 bytes global RAM.
 
 | Sketch | Flash | Global RAM | Result |
@@ -34,14 +33,19 @@ zero warnings: 31,604 bytes flash and 1,274 bytes global RAM.
 | SdCardTest | 12,360 | 839 | Compiled |
 
 Native harness `tests/arduino/run.cmd` compiled and ran the actual Persist.cpp,
-GpsModule.cpp, Fmt.cpp and EspClient.cpp using mocked hardware and AVR struct
-packing. Passed:
+GpsModule.cpp, Fmt.cpp, EspClient.cpp, ImpactDetector.cpp and SdLogger.cpp
+using mocked hardware and AVR struct packing. Checks that passed
 
 * EEPROM interruption at each of 24 tested write-cut positions, generation
   rollover, shipment change and migration of a valid legacy record.
 * Valid RMC coordinates; immediate invalidation for RMC void/GGA no fix;
   invalid hemisphere, malformed digits and out-of-range coordinates; stale
   fix/time handling and valid UTC formatting.
+* Invalid or missing RMC UTC, leap-day validation, and withholding UTC at
+  midnight until the next dated RMC.
+* Impact debounce at its boundary, after long uptime, and across millis rollover.
+* SD recovery after an absent card at boot and failure handling when final sync
+  fails. An unconfirmed row leaves the successful row count unchanged.
 * Positive framed HTTP acknowledgement, every byte split across two IPD frames,
   wrong HTTP status, zero entry, HTML body, missing frame and truncated ACK.
 

@@ -14,7 +14,12 @@
   #define PG_KICK() do {} while (0)
 #endif
 
+static Sd2Card card_;
+static SdVolume volume_;
+static SdFile root_;
+
 static bool     ready_   = false;
+static bool     writeFault_ = false;
 static uint32_t rows_    = 0;
 static uint32_t errors_  = 0;
 
@@ -25,45 +30,56 @@ bool sdOk()              { return ready_; }
 uint32_t sdRowsWritten() { return rows_; }
 uint32_t sdWriteErrors() { return errors_; }
 
-bool sdBegin() {
+static bool writeFailed() {
+  ++errors_;
+  writeFault_ = true;
   ready_ = false;
+  return false;
+}
 
-  /* The shield wires CS to D10. D10 must also be an output for the AVR's
-   * SPI hardware to stay in master mode, which SD.begin() handles, but
-   * being explicit costs nothing and has saved hours before now. */
+static bool finishWrite(SdFile &file) {
+  // SdFile exposes the result of the final sync through close().
+  const bool written = !file.getWriteError();
+  const bool synced = file.close();
+  return (written && synced) || writeFailed();
+}
+
+bool sdBegin(bool readOnly) {
+  ready_ = false;
+  // A failed write can leave a dirty shared FAT cache. Never remount it
+  // against a replacement card. A reset discards that cache.
+  if (writeFault_) return false;
+  if (root_.isOpen() && !root_.close()) return writeFailed();
+  SdVolume::cacheClear();
   pinMode(PIN_SD_CS, OUTPUT);
-
-  if (!SD.begin(PIN_SD_CS)) return false;
-  ready_ = true;
-
-  /* Write the CSV header exactly once, when the file is first created. */
-  if (!SD.exists(LOG_FILENAME)) {
-    File f = SD.open(LOG_FILENAME, FILE_WRITE);
-    if (!f) { ready_ = false; return false; }
-    char c;
-    PGM_P p = HEADER_P;
-    while ((c = pgm_read_byte(p++)) != 0) f.write(c);
-    f.write('\n');
-    f.close();
+  if (!card_.init(SPI_HALF_SPEED, PIN_SD_CS) ||
+      !volume_.init(&card_) || !root_.openRoot(&volume_)) return false;
+  if (readOnly) {
+    ready_ = true;
+    return true;
   }
-  return true;
+
+  SdFile file;
+  if (!file.open(&root_, LOG_FILENAME, O_WRITE | O_CREAT | O_APPEND)) return writeFailed();
+  if (!file.fileSize()) {
+    for (PGM_P p = HEADER_P; pgm_read_byte(p); ++p) file.write(pgm_read_byte(p));
+    file.write('\n');
+  }
+  ready_ = finishWrite(file);
+  return ready_;
 }
 
 bool sdLogBoot(uint16_t bootCount, uint16_t shipmentId) {
   if (!ready_) return false;
-  File f = SD.open(LOG_FILENAME, FILE_WRITE);
-  if (!f) { errors_++; return false; }
+  SdFile f;
+  if (!f.open(&root_, LOG_FILENAME, O_WRITE | O_APPEND)) return writeFailed();
 
   f.print(F("# session "));
   f.print(bootCount);
   f.print(F(" shipment "));
   f.print(shipmentId);
   f.print(F(" firmware ParcelGuardian\n"));
-  f.flush();
-  bool ok = !f.getWriteError();
-  f.close();
-  if (!ok) errors_++;
-  return ok;
+  return finishWrite(f);
 }
 
 bool sdLogRow(const char *utc, const char *state, const char *event,
@@ -73,8 +89,8 @@ bool sdLogRow(const char *utc, const char *state, const char *event,
 
   if (!ready_) return false;
 
-  File f = SD.open(LOG_FILENAME, FILE_WRITE);
-  if (!f) { errors_++; return false; }
+  SdFile f;
+  if (!f.open(&root_, LOG_FILENAME, O_WRITE | O_APPEND)) return writeFailed();
 
   char num[20];
 
@@ -103,25 +119,23 @@ bool sdLogRow(const char *utc, const char *state, const char *event,
   f.print(uploaded ? 1 : 0);
   f.write('\n');
 
-  f.flush();
-  bool ok = !f.getWriteError();
-  f.close();
-  if (ok) rows_++; else errors_++;
+  const bool ok = finishWrite(f);
+  if (ok) ++rows_;
   return ok;
 }
 
 bool sdDump(Stream &out) {
   if (!ready_) return false;
 
-  File f = SD.open(LOG_FILENAME, FILE_READ);
-  if (!f) return false;
+  SdFile f;
+  if (!f.open(&root_, LOG_FILENAME, O_READ)) return false;
 
   /* A full log at 9600 baud takes far longer than the 8 second watchdog
-   * window, so the dog gets kicked every line. Without this the handover
+   * window, so the dog gets kicked after each byte. Without this the handover
    * read-out reboots the tracker halfway through the evidence. */
-  while (f.available()) {
-    char c = (char)f.read();
-    out.write(c);
+  for (uint32_t remaining = f.fileSize(); remaining; --remaining) {
+    const int c = f.read();
+    if (c < 0 || out.write((uint8_t)c) != 1) { f.close(); return false; }
     PG_KICK();
   }
   f.close();
@@ -130,7 +144,7 @@ bool sdDump(Stream &out) {
 
 bool sdWipe() {
   if (!ready_) return false;
-  if (SD.exists(LOG_FILENAME) && !SD.remove(LOG_FILENAME)) { errors_++; return false; }
+  if (!SdFile::remove(&root_, LOG_FILENAME)) return writeFailed();
   rows_ = 0;
   errors_ = 0;
   return sdBegin();   /* recreate with a fresh header */
@@ -138,7 +152,7 @@ bool sdWipe() {
 
 #else  /* ENABLE_SD == 0 — stubs so the rest of the firmware still builds */
 
-bool sdBegin()             { return false; }
+bool sdBegin(bool)         { return false; }
 bool sdOk()                { return false; }
 bool sdLogBoot(uint16_t, uint16_t) { return false; }
 bool sdLogRow(const char *, const char *, const char *, float, float,

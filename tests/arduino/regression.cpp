@@ -8,6 +8,15 @@ void pgServiceUplink(){fakeClock++;}
 #include "../../arduino/ParcelGuardian/GpsModule.cpp"
 #include "../../arduino/ParcelGuardian/Fmt.cpp"
 #include "../../arduino/ParcelGuardian/EspClient.cpp"
+#include "../../arduino/ParcelGuardian/ImpactDetector.cpp"
+#include "../../arduino/ParcelGuardian/SdLogger.cpp"
+
+static float measuredMagnitude = 1.0f;
+Adxl345::Adxl345() : addr_(0x53) {}
+bool Adxl345::readMagnitude(float &value) {
+  value = measuredMagnitude;
+  return true;
+}
 
 static std::string nmea(std::string s){
   unsigned char sum=0;for(char c:s)sum^=c;
@@ -55,7 +64,60 @@ int main(){
   feedGps(valid);fakeClock+=10000;assert(!gpsHasFix());
   char utc[20];assert(!gpsTimestamp(utc,sizeof(utc)));
   feedGps(valid);assert(gpsTimestamp(utc,sizeof(utc)));assert(!strcmp(utc,"2026-11-06 12:00:00"));
-  port.feed("");puts("GPS: valid, void, no-fix, malformed, range and stale time passed");
+  for (const char *invalid : {
+    "GPRMC,,A,0118.0000,N,10348.0000,E,0,0,071126,,,A",
+    "GPRMC,120000.00,A,0118.0000,N,10348.0000,E,0,0,310226,,,A",
+    "GPRMC,120000.00,A,0118.0000,N,10348.0000,E,0,0,290226,,,A"
+  }) {
+    feedGps(valid);
+    feedGps(invalid);
+    assert(!gpsTimestamp(utc, sizeof(utc)));
+  }
+  feedGps("GPRMC,235959.00,A,0118.0000,N,10348.0000,E,0,0,061126,,,A");
+  fakeClock += 1000;
+  feedGps("GPGGA,000000.00,0118.0000,N,10348.0000,E,1,08,1,1,M,1,M,,");
+  assert(gpsHasFix() && !gpsTimestamp(utc, sizeof(utc)));
+  feedGps("GPRMC,000000.00,A,0118.0000,N,10348.0000,E,0,0,071126,,,A");
+  assert(gpsTimestamp(utc, sizeof(utc)) && !strcmp(utc, "2026-11-07 00:00:00"));
+  feedGps("GPRMC,120000.00,A,0118.0000,N,10348.0000,E,0,0,290224,,,A");
+  assert(gpsTimestamp(utc, sizeof(utc)) && !strcmp(utc, "2024-02-29 12:00:00"));
+  puts("GPS: fix and UTC validation, expiry, leap date and midnight passed");
+
+  Adxl345 sensor;
+  ImpactDetector detector;
+  detector.begin(&sensor);
+  fakeClock = 100;
+  measuredMagnitude = 1.5f;
+  assert(detector.update() == IMPACT_ROUGH);
+  fakeClock += 50;
+  measuredMagnitude = 2.5f;
+  assert(detector.update() == IMPACT_NONE);
+  fakeClock = 100 + IMPACT_DEBOUNCE_MS;
+  assert(detector.update() == IMPACT_SEVERE);
+  fakeClock = 0x80002000UL;
+  assert(detector.update() == IMPACT_SEVERE);
+  fakeClock = UINT32_MAX - 999;
+  assert(detector.update() == IMPACT_SEVERE);
+  fakeClock += IMPACT_DEBOUNCE_MS - ACCEL_PERIOD_MS;
+  assert(detector.update() == IMPACT_NONE);
+  fakeClock += ACCEL_PERIOD_MS;
+  assert(detector.update() == IMPACT_SEVERE);
+  assert(detector.eventCount() == 5);
+  puts("Impact: debounce boundary, long uptime and millis rollover passed");
+
+  assert(!sdBegin() && !sdOk() && sdWriteErrors() == 0);
+  mockCardPresent = true;
+  assert(sdBegin() && sdOk());
+  assert(sdLogBoot(1, 1001));
+  const auto logRow = [] {
+    return sdLogRow("", "PREP", "HEARTBEAT", 0, 0, 0, false, 0, 0, 0, false);
+  };
+  assert(logRow() && sdRowsWritten() == 1);
+  mockCloseFails = true;
+  assert(!logRow() && sdRowsWritten() == 1 && sdWriteErrors() == 1);
+  mockCloseFails = false;
+  assert(!sdOk() && !sdBegin() && !logRow());
+  puts("SD: absent-at-boot recovery and sync failure latch passed");
 
   const std::string response="HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n12\n";
   assert(ack("\r\nSEND OK\r\n"+frame(response)+"\r\nCLOSED\r\n"));

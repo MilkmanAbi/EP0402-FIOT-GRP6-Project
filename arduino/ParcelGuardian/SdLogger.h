@@ -20,7 +20,7 @@
 
 #include <Arduino.h>
 
-bool sdBegin();
+bool sdBegin(bool readOnly = false);
 bool sdOk();
 
 /* Append one record. Returns false if the card is absent or the write

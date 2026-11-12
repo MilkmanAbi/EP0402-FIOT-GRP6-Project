@@ -25,4 +25,5 @@ public:
   size_t print(char *s){return print((const char *)s);}
   template<class T>size_t print(T n){return print(std::to_string(n).c_str());}
 };
+using Stream = Print;
 #pragma pack(1)
