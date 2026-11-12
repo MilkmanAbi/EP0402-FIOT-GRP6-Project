@@ -17,7 +17,7 @@ calibration or proof that a particular shield/handset combination works.
 
 ## Firmware
 
-The 12 November 2026 phone-server build uses **30,434 / 32,256 bytes flash**
+The 12 November 2026 phone-server build uses **30,486 / 32,256 bytes flash**
 and **1,327 / 2,048 bytes globals**, leaving 721 bytes for stack and locals.
 Arduino CLI reported zero compiler warnings with the example pairing settings.
 Recompile with your own `Secrets.h` to check its size.
@@ -57,7 +57,7 @@ from the Uno and do not validate real serial reception or sensor sampling gaps.
 
 `flutter analyze`: **No issues found.**
 
-`flutter test`: **11 tests passed**, including real loopback HTTP requests:
+`flutter test`: **13 tests passed**, including real loopback HTTP requests:
 
 * Exact WAITING/LIVE/QUIET/LOST boundaries and future-clock handling.
 * No-fix check-ins, no-fix severe impact and valid zero coordinates.
@@ -69,6 +69,8 @@ from the Uno and do not validate real serial reception or sensor sampling gaps.
 * Torn final append recovery; disk-write failure returns 503 without memory ACK.
 * SD import sessions, missing GPS and offline events.
 * Narrow phone layout at 1.25× text scaling, dashboard/settings/evidence views.
+* Hotspot address selection survives refresh and matches the generated config.
+* Default contact stays LIVE through the normal 20-second upload interval.
 
 `flutter build apk --release`: **passed**, universal APK approximately 53 MB.
 The final incremental release rebuild also passed. The APK installed and launched
@@ -102,7 +104,7 @@ successful physical ESP-to-phone upload or calibrated sensor behaviour.
 4. Run the calibration table with the tracker mounted in the actual parcel.
 5. Configure the CMF Phone 2 Pro hotspot and prove `/health` reachability from
    a client. Pair matching keys/ID/address and verify positive Uno upload ACKs.
-6. Disable/restore hotspot and observe reconnection and 20s/60s contact transitions.
+6. Disable/restore hotspot and observe reconnection and 30s/60s contact transitions.
 7. Test no-card/full-card/read-only/failed-card handling and abrupt power cuts.
 8. Import the actual SD CSV; compare against observed impacts and phone summaries.
 9. Configure a real private ThingSpeak channel, enable HTTPS relay, and verify

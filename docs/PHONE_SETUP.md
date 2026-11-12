@@ -12,10 +12,10 @@ This guide does not assume its hotspot uses `192.168.43.1`.
 3. Turn the hotspot on. If there is an automatic hotspot-off option, disable
    it for the demonstration. Mobile data is needed only for map tiles and
    the optional cloud relay.
-4. In ParcelGuardian Settings, refresh phone addresses. Select the hotspot-side
-   IPv4 address. Several addresses may be listed; selection is not an automatic
-   guarantee of reachability. A connected laptop's default gateway is usually
-   the hotspot address (`ipconfig` on Windows).
+4. In ParcelGuardian Settings, refresh phone addresses. Select or enter the
+   hotspot-side IPv4 address. Refreshing keeps your selection. If several
+   addresses appear, check the default gateway of a laptop connected to the
+   hotspot (`ipconfig` on Windows).
 5. Save the app settings, then copy its firmware configuration. Put those values
    in `arduino/ParcelGuardian/Secrets.h`, with the actual hotspot SSID/password.
    This file is gitignored. Leave `UPLINK_PHONE=1` in Config.h.
@@ -29,7 +29,7 @@ This guide does not assume its hotspot uses `192.168.43.1`.
    If it cannot connect, check the chosen IP, receiver state, hotspot isolation
    settings and whether the laptop really joined that phone.
 9. Put the tracker outdoors for GPS. A check-in without GPS should still show
-   LIVE contact, with no current position. Demo thresholds are 20 seconds to
+   LIVE contact, with no current position. Demo thresholds are 30 seconds to
    QUIET and 60 seconds to LOST. Turn the hotspot off, observe both transitions,
    restore it and check that a new valid packet restores LIVE.
 

@@ -1219,9 +1219,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
     lost = TextEditingController(text: '${m.lostSeconds}');
     key = TextEditingController(text: m.apiKey);
     cloudKey = TextEditingController(text: m.cloudKey);
-    host = TextEditingController(
-      text: m.addresses.isEmpty ? '' : m.addresses.first,
-    );
+    host = TextEditingController(text: m.hotspotHost);
     cloud = m.cloudEnabled;
     appearance = m.theme;
   }
@@ -1246,6 +1244,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
         quiet: int.parse(quiet.text),
         lost: int.parse(lost.text),
         key: key.text.trim(),
+        host: host.text.trim(),
         appearance: appearance,
         cloud: cloud,
         writeKey: cloudKey.text.trim(),
@@ -1278,16 +1277,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: () async {
-                await m.refreshAddresses();
-                if (mounted) {
-                  setState(() {
-                    if (m.addresses.isNotEmpty) {
-                      host.text = m.addresses.first;
-                    }
-                  });
-                }
-              },
+              onPressed: m.refreshAddresses,
               icon: const Icon(Icons.refresh),
               label: const Text('Refresh phone addresses'),
             ),
@@ -1335,7 +1325,8 @@ class _SettingsPanelState extends State<SettingsPanel> {
                 OutlinedButton.icon(
                   onPressed: () async {
                     if (key.text.trim() != m.apiKey ||
-                        int.tryParse(id.text) != m.shipment) {
+                        int.tryParse(id.text) != m.shipment ||
+                        host.text.trim() != m.hotspotHost) {
                       message('Save pairing settings before copying.');
                       return;
                     }
@@ -1345,7 +1336,7 @@ class _SettingsPanelState extends State<SettingsPanel> {
                       return;
                     }
                     await Clipboard.setData(
-                      ClipboardData(text: m.firmwareConfig(host.text.trim())),
+                      ClipboardData(text: m.firmwareConfig()),
                     );
                     if (mounted) {
                       message('Firmware config copied. Keep it private.');
@@ -1407,10 +1398,12 @@ class _SettingsPanelState extends State<SettingsPanel> {
               children: [
                 TextButton(
                   onPressed: () => setState(() {
-                    quiet.text = '20';
-                    lost.text = '60';
+                    quiet.text = '${ControlCentre.demoQuietSeconds}';
+                    lost.text = '${ControlCentre.demoLostSeconds}';
                   }),
-                  child: const Text('Demo: 20s / 60s'),
+                  child: const Text(
+                    'Demo: ${ControlCentre.demoQuietSeconds}s / ${ControlCentre.demoLostSeconds}s',
+                  ),
                 ),
                 TextButton(
                   onPressed: () => setState(() {

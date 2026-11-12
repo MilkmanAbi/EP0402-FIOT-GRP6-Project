@@ -201,7 +201,7 @@ The algorithm does not establish damage or validated fall detection.
 | 1 / 1 | READOUT | Stop tracking and print the SD record |
 
 Verify switch polarity with console `m`; configure `DIP_ACTIVE_LOW` if needed.
-The app defaults to **QUIET after 20 seconds** and **LOST after 60 seconds** for
+The app defaults to **QUIET after 30 seconds** and **LOST after 60 seconds** for
 the demo. Both thresholds are configurable.
 
 Console commands: `?` help, `s` status, `r` RAM, `m` mode, `c` recalibrate,
@@ -231,9 +231,9 @@ The APK is written to `app/build/app/outputs/flutter-apk/app-release.apk`.
 `tools/build.ps1` runs both sets of builds and app checks. Native Arduino
 regressions run with `tests/arduino/run.cmd` on Windows with MSVC installed.
 
-The default Uno build has measured **30,434 bytes flash / 1,327 bytes global
+The default Uno build has measured **30,486 bytes flash / 1,327 bytes global
 RAM**, with no Arduino compiler warnings. All four bench sketches compile.
-Eleven Flutter tests and the native firmware regression harness pass.
+Thirteen Flutter tests and the native firmware regression harness pass.
 Emulator checks cover live HTTP reception, authentication, duplicate handling,
 maps, SD import and CSV export. The app also launches on the physical CMF phone
 shown above. See [verification details](docs/TESTING.md) for the distinction

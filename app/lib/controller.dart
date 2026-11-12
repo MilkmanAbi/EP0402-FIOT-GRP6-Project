@@ -26,8 +26,12 @@ class ControlCentre extends ChangeNotifier {
       name = 'Parcel 1001',
       error = '',
       cloudMessage = 'Cloud relay off';
-  String theme = 'system';
-  int shipment = 1001, quietSeconds = 20, lostSeconds = 60, cloudCursor = 0;
+  String theme = 'system', hotspotHost = '';
+  static const demoQuietSeconds = 30, demoLostSeconds = 60;
+  int shipment = 1001,
+      quietSeconds = demoQuietSeconds,
+      lostSeconds = demoLostSeconds,
+      cloudCursor = 0;
   bool ready = false,
       demo = false,
       cloudEnabled = false,
@@ -43,10 +47,11 @@ class ControlCentre extends ChangeNotifier {
   CheckIn? get latest => records.isEmpty ? null : records.last;
   Contact get contact =>
       contactState(latest?.received, now, quietSeconds, lostSeconds);
-  String get endpoint => addresses.isEmpty
-      ? 'Enable hotspot to find the phone IP'
-      : 'http://${addresses.first}:8080';
-  bool get demoThresholds => quietSeconds == 20 && lostSeconds == 60;
+  String get endpoint => hotspotHost.isEmpty
+      ? 'Choose the hotspot IPv4 in Settings'
+      : 'http://$hotspotHost:8080';
+  bool get demoThresholds =>
+      quietSeconds == demoQuietSeconds && lostSeconds == demoLostSeconds;
   late final List<CheckIn> _samples = List.generate(
     18,
     (i) => CheckIn(
@@ -85,8 +90,16 @@ class ControlCentre extends ChangeNotifier {
       cloudKey = await secrets.read(key: 'cloud-key') ?? '';
       shipment = prefs.getInt('shipment') ?? 1001;
       name = prefs.getString('name') ?? 'Parcel $shipment';
-      quietSeconds = prefs.getInt('quiet') ?? 20;
-      lostSeconds = prefs.getInt('lost') ?? 60;
+      quietSeconds = prefs.getInt('quiet') ?? demoQuietSeconds;
+      lostSeconds = prefs.getInt('lost') ?? demoLostSeconds;
+      if (!(prefs.getBool('contactPresetMigrated') ?? false)) {
+        if (quietSeconds == 20 && lostSeconds == 60) {
+          quietSeconds = demoQuietSeconds;
+          await prefs.setInt('quiet', quietSeconds);
+        }
+        await prefs.setBool('contactPresetMigrated', true);
+      }
+      hotspotHost = prefs.getString('hotspotHost') ?? '';
       theme = prefs.getString('theme') ?? 'system';
       cloudEnabled = prefs.getBool('cloud') ?? false;
       cloudCursor = prefs.getInt('cloudCursor') ?? 0;
@@ -177,6 +190,7 @@ class ControlCentre extends ChangeNotifier {
     required int quiet,
     required int lost,
     required String key,
+    required String host,
     required String appearance,
     required bool cloud,
     required String writeKey,
@@ -199,6 +213,10 @@ class ControlCentre extends ChangeNotifier {
         'Enter a valid 16-character ThingSpeak write key.',
       );
     }
+    if (host.isNotEmpty &&
+        InternetAddress.tryParse(host)?.type != InternetAddressType.IPv4) {
+      throw const FormatException('Enter a valid hotspot IPv4 address.');
+    }
     final wasRunning = running;
     if (wasRunning) await toggleReceiver();
     name = label.trim().isEmpty ? 'Parcel $id' : label.trim();
@@ -206,6 +224,7 @@ class ControlCentre extends ChangeNotifier {
     quietSeconds = quiet;
     lostSeconds = lost;
     apiKey = key;
+    hotspotHost = host;
     theme = appearance;
     if (cloudKey != writeKey) {
       cloudCursor = 0;
@@ -219,19 +238,20 @@ class ControlCentre extends ChangeNotifier {
     await prefs.setInt('shipment', shipment);
     await prefs.setInt('quiet', quiet);
     await prefs.setInt('lost', lost);
+    await prefs.setString('hotspotHost', hotspotHost);
     await prefs.setString('theme', theme);
     await prefs.setBool('cloud', cloudEnabled);
     if (wasRunning) await toggleReceiver();
     notifyListeners();
   }
 
-  String firmwareConfig(String host) =>
+  String firmwareConfig() =>
       '''
 // Copy into arduino/ParcelGuardian/Secrets.h (gitignored).
 // Set WIFI_SSID and WIFI_PASSWORD to your 2.4 GHz WPA2 phone hotspot.
 #define WIFI_SSID "YOUR_HOTSPOT_NAME"
 #define WIFI_PASSWORD "YOUR_HOTSPOT_PASSWORD"
-#define PHONE_SERVER_HOST "$host"
+#define PHONE_SERVER_HOST "$hotspotHost"
 #define PHONE_API_KEY "$apiKey"
 #define SHIPMENT_ID $shipment
 ''';

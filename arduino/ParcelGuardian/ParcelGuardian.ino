@@ -149,6 +149,7 @@ static void logRow(uint8_t eventKind, bool uploaded) {
 #if ENABLE_ESP
 static void attemptUpload() {
   SysState prev = state_;
+  const uint32_t previousStateEnteredMs = stateEnteredMs;
   enterState(ST_SYNC);
 
   bool fix = gpsHasFix();
@@ -176,6 +177,8 @@ static void attemptUpload() {
   }
 
   enterState(prev == ST_SYNC ? ST_TRANSIT : prev);
+  // SYNC is temporary. Keep the original PREP deadline across uploads.
+  if (prev == ST_PREP) stateEnteredMs = previousStateEnteredMs;
 }
 #endif
 
